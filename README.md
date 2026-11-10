@@ -45,25 +45,16 @@ DB_PATH=./database.db
 
 Endpoints principales
 
-┌────────┬────────────────────┬─────────────────────────────┬──────┐
-│ Método │      Endpoint      │         Descripción         │ Auth │
-├────────┼────────────────────┼─────────────────────────────┼──────┤
-│ POST   │ /api/auth/register │ Registrar usuario           │ No   │
-├────────┼────────────────────┼─────────────────────────────┼──────┤
-│ POST   │ /api/auth/login    │ Iniciar sesión              │ No   │
-├────────┼────────────────────┼─────────────────────────────┼──────┤
-│ GET    │ /api/items         │ Listar ítems (con ?search=) │ Sí   │
-├────────┼────────────────────┼─────────────────────────────┼──────┤
-│ POST   │ /api/items         │ Crear ítem                  │ Sí   │
-├────────┼────────────────────┼─────────────────────────────┼──────┤
-│ PUT    │ /api/items/:id     │ Actualizar ítem             │ Sí   │
-├────────┼────────────────────┼─────────────────────────────┼──────┤
-│ DELETE │ /api/items/:id     │ Eliminar ítem               │ Sí   │
-├────────┼────────────────────┼─────────────────────────────┼──────┤
-│ GET    │ /api/items/export  │ Exportar ítems a CSV        │ Sí   │
-├────────┼────────────────────┼─────────────────────────────┼──────┤
-│ GET    │ /api/usuarios      │ Listar usuarios             │ Sí   │
-└────────┴────────────────────┴─────────────────────────────┴──────┘
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/auth/register` | Registrar usuario | No |
+| POST | `/api/auth/login` | Iniciar sesión | No |
+| GET | `/api/items` | Listar ítems (con `?search=`) | Sí |
+| POST | `/api/items` | Crear ítem | Sí |
+| PUT | `/api/items/:id` | Actualizar ítem | Sí |
+| DELETE | `/api/items/:id` | Eliminar ítem | Sí |
+| GET | `/api/items/export` | Exportar ítems a CSV | Sí |
+| GET | `/api/usuarios` | Listar usuarios | Sí |
 
 Pruebas automatizadas
 
