@@ -33,8 +33,9 @@ cd admin-panel-backend
 npm install
 ```
 # Ejecutar en modo desarrollo
+```bash
 npm run dev
-
+```
 El servidor iniciará en http://localhost:3001.
 
 Variables de entorno
@@ -59,9 +60,9 @@ Endpoints principales
 | GET | `/api/usuarios` | Listar usuarios | Sí |
 
 Pruebas automatizadas
-
+```bash
 npm test
-
+```
 Ejecutan 16 pruebas sobre autenticación, ítems, usuarios y exportación CSV.
 
 Despliegue
