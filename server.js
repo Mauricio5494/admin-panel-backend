@@ -30,7 +30,98 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 
-// Middleware de autenticación JWT
+// ---------- VALIDACIÓN DE CONTENIDO (tarjetas de crédito e insultos) ----------
+
+// Regex para detectar números de tarjeta de crédito (13 a 19 dígitos, con o sin separadores)
+const CC_REGEX = /(?:\d[ -]?){13,19}/;
+
+// Listas de palabras ofensivas por idioma (no exhaustivas, cubren lo más común)
+const INSULTOS = {
+  es: [
+    'idiota', 'estupido', 'estúpido', 'imbecil', 'imbécil', 'menso', 'tarado', 'cretino',
+    'puta', 'puto', 'cabron', 'cabrón', 'joder', 'jodido', 'jodida', 'coño', 'culo',
+    'mierda', 'pendejo', 'pendeja', 'gilipollas', 'capullo', 'maricon', 'maricón',
+    'basura', 'inutil', 'inútil', 'miserable', 'cagado', 'cagada', 'hostia', 'hostias',
+    'mariconazo', 'putanazo', 'cabrónazo', 'jodido', 'jodida', 'joderse', 'pene',
+    'pene', 'vagina', 'cojones', 'cojuda', 'cojudo', 'concha', 'conchudo', 'conchuda',
+    'verga', 'verga', 'vergon', 'verga', 'chingar', 'chingada', 'chingado', 'chingao'
+  ],
+  en: [
+    'idiot', 'stupid', 'imbecile', 'moron', 'dumbass', 'asshole', 'bastard', 'bitch',
+    'cunt', 'fuck', 'fucking', 'fucked', 'shit', 'piss', 'prick', 'dick', 'pussy',
+    'twat', 'crap', 'damn', 'hell', 'bollocks', 'wanker', 'tosser', 'bugger',
+    'bloody', 'crap', 'suck', 'sucks', 'screwed', 'jerk', 'ass', 'retard',
+    'retarded', 'slut', 'whore', 'faggot', 'dyke', 'nigger', 'nigga', 'tranny',
+    'chink', 'gook', 'spic', 'kike', 'redneck', 'cracker', 'honky', 'white trash'
+  ],
+  ru: [
+    'идиот', 'тупой', 'дебил', 'придурок', 'курва', 'сука', 'блядь', 'бля',
+    'ебать', 'ебал', 'ебала', 'ебу', 'ебаный', 'ебаная', 'ебанный', 'пиздец',
+    'пизда', 'пидор', 'пидорас', 'мудак', 'мразь', 'черт', 'чертов', 'чертова',
+    'блин', 'дерьмо', 'говно', 'говна', 'говнюк', 'ублюдок', 'сукин сын',
+    'сучка', 'пидар', 'пидарская', 'гандон', 'хер', 'хуй', 'хуйня', 'хуево',
+    'хуевая', 'хуевый', 'хуя', 'ебаш', 'заебал', 'заебала', 'отъебись', 'пошёл на хуй',
+    'пошла на хуй', 'иди на хуй', 'иди на хуй', 'соси', 'соси хуй', 'соси член',
+    'отсоси', 'отсос', 'минет', 'член', 'писька', 'писька', 'попка', 'жопа', 'жопы'
+  ],
+  hi: [
+    'बेवकूफ', 'मूर्ख', 'घटिया', 'नालायक', 'हरामी', 'बदचलन', 'चुदैल', 'चूतिया',
+    'भोसड़ी', 'भोसड़ी के', 'मादरचोद', 'मादरचोदन', 'बहनचोद', 'बहन का लौड़ा',
+    'लंड', 'चूत', 'गांड', 'गांडू', 'चूतिया', 'चुदक्कड़', 'चुदाई', 'चोद',
+    'चोद दे', 'चोद दिया', 'चोद दी', 'घटिया इंसान', 'कमीना', 'कमीना इंसान',
+    'डरपोक', 'बदमाश', 'गुंडा', 'दलाल', 'खोटा', 'धोखेबाज', 'घूसखोर', 'बेकार',
+    'बकवास', 'बकवास इंसान', 'बेवजह', 'बकवास बात', 'बकवास करना'
+  ]
+};
+
+function detectarTarjetaCredito(texto) {
+  return CC_REGEX.test(texto);
+}
+
+function detectarInsultos(texto, idioma) {
+  const palabras = INSULTOS[idioma] || [];
+  const textoLower = texto.toLowerCase();
+  for (const palabra of palabras) {
+    if (textoLower.includes(palabra.toLowerCase())) {
+      return palabra;
+    }
+  }
+  // También revisar en inglés como respaldo universal
+  for (const palabra of INSULTOS.en) {
+    if (textoLower.includes(palabra.toLowerCase())) {
+      return palabra;
+    }
+  }
+  return null;
+}
+
+function validarContenido(titulo, descripcion, idioma = 'es') {
+  const campos = [
+    { nombre: 'título', valor: titulo || '' },
+    { nombre: 'descripción', valor: descripcion || '' }
+  ];
+
+  for (const campo of campos) {
+    if (detectarTarjetaCredito(campo.valor)) {
+      return {
+        valido: false,
+        razon: 'No se permite ingresar números de tarjeta de crédito.'
+      };
+    }
+    const insulto = detectarInsultos(campo.valor, idioma);
+    if (insulto) {
+      return {
+        valido: false,
+        razon: `El campo "${campo.nombre}" contiene lenguaje inapropiado.`
+      };
+    }
+  }
+
+  return { valido: true };
+}
+
+// ---------- MIDDLEWARE DE AUTENTICACIÓN JWT ----------
+
 function auth(req, res, next) {
   const header = req.headers['authorization'];
   if (!header || !header.startsWith('Bearer ')) {
@@ -44,8 +135,68 @@ function auth(req, res, next) {
   });
 }
 
-// Inicializar base de datos y arrancar servidor
-initDb().then(() => {
+// ---------- INICIALIZAR BASE DE DATOS Y ARRANCAR SERVIDOR ----------
+
+async function inicializarTablas() {
+  if (isProduction) {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS usuarios (
+        id SERIAL PRIMARY KEY,
+        nombre TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        idioma TEXT DEFAULT 'es',
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE IF NOT EXISTS items (
+        id SERIAL PRIMARY KEY,
+        titulo TEXT NOT NULL,
+        descripcion TEXT,
+        imagen TEXT,
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        usuario_id INTEGER REFERENCES usuarios(id)
+      );
+    `);
+  } else {
+    await new Promise((resolve, reject) => {
+      sqliteDb.serialize(() => {
+        sqliteDb.run(`CREATE TABLE IF NOT EXISTS usuarios (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nombre TEXT NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          idioma TEXT DEFAULT 'es',
+          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        sqliteDb.run(`CREATE TABLE IF NOT EXISTS items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          titulo TEXT NOT NULL,
+          descripcion TEXT,
+          imagen TEXT,
+          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+          usuario_id INTEGER,
+          FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
+        )`);
+        // Migraciones para bases de datos preexistentes
+        function asegurarColumna(tabla, columna, definicion) {
+          sqliteDb.run(`ALTER TABLE ${tabla} ADD COLUMN ${columna} ${definicion}`, (err) => {
+            if (err && err.message && err.message.includes('duplicate column')) {
+              // La columna ya existe, ignorar
+            }
+          });
+        }
+        asegurarColumna('usuarios', 'password_hash', 'TEXT');
+        asegurarColumna('usuarios', 'idioma', "TEXT DEFAULT 'es'");
+        asegurarColumna('items', 'imagen', 'TEXT');
+        asegurarColumna('items', 'descripcion', 'TEXT');
+        asegurarColumna('items', 'usuario_id', 'INTEGER');
+        resolve();
+      });
+    });
+  }
+}
+
+inicializarTablas().then(() => {
   if (require.main === module) {
     app.listen(PORT, () => {
       console.log(`Backend escuchando en http://localhost:${PORT} (${isProduction ? 'PostgreSQL' : 'SQLite'})`);
@@ -61,22 +212,29 @@ module.exports = app;
 // ---------- AUTENTICACIÓN ----------
 
 app.post('/api/auth/register', async (req, res) => {
-  const { nombre, email, password } = req.body;
+  const { nombre, email, password, idioma } = req.body;
   if (!nombre || !email || !password) {
     return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
   }
+
+  // Validar nombre: sin insultos ni tarjetas de crédito
+  const validacion = validarContenido(nombre, '', idioma || 'es');
+  if (!validacion.valido) {
+    return res.status(400).json({ error: validacion.razon });
+  }
+
   try {
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
-      'INSERT INTO usuarios (nombre, email, password_hash) VALUES (?, ?, ?)',
-      [nombre, email, hash]
+      'INSERT INTO usuarios (nombre, email, password_hash, idioma) VALUES (?, ?, ?, ?)',
+      [nombre, email, hash, idioma || 'es']
     );
-    const token = jwt.sign({ id: result.lastID, email, nombre }, JWT_SECRET, { expiresIn: '7d' });
-    res.status(201).json({ token, usuario: { id: result.lastID, nombre, email } });
+    const token = jwt.sign({ id: result.lastID, email, nombre, idioma: idioma || 'es' }, JWT_SECRET, { expiresIn: '7d' });
+    res.status(201).json({ token, usuario: { id: result.lastID, nombre, email, idioma: idioma || 'es' } });
   } catch (err) {
     const esDuplicado = err.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
       (err.message && err.message.includes('UNIQUE constraint failed')) ||
-      (err.code === '23505'); // PostgreSQL unique_violation
+      (err.code === '23505');
     if (esDuplicado) {
       return res.status(409).json({ error: 'El email ya está registrado' });
     }
@@ -94,8 +252,8 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user) return res.status(401).json({ error: 'Credenciales inválidas' });
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Credenciales inválidas' });
-    const token = jwt.sign({ id: user.id, email: user.email, nombre: user.nombre }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, usuario: { id: user.id, nombre: user.nombre, email: user.email } });
+    const token = jwt.sign({ id: user.id, email: user.email, nombre: user.nombre, idioma: user.idioma || 'es' }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, usuario: { id: user.id, nombre: user.nombre, email: user.email, idioma: user.idioma || 'es' } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -124,6 +282,14 @@ app.get('/api/items', auth, async (req, res) => {
 app.post('/api/items', auth, upload.single('imagen'), async (req, res) => {
   const { titulo, descripcion } = req.body;
   if (!titulo) return res.status(400).json({ error: 'El título es requerido' });
+
+  // Validar contenido: sin tarjetas de crédito ni insultos
+  const idioma = req.user.idioma || 'es';
+  const validacion = validarContenido(titulo, descripcion || '', idioma);
+  if (!validacion.valido) {
+    return res.status(400).json({ error: validacion.razon });
+  }
+
   const imagen = req.file ? `/uploads/${req.file.filename}` : null;
   try {
     const result = await run(
@@ -139,6 +305,13 @@ app.post('/api/items', auth, upload.single('imagen'), async (req, res) => {
 app.put('/api/items/:id', auth, upload.single('imagen'), async (req, res) => {
   const { id } = req.params;
   const { titulo, descripcion } = req.body;
+
+  const idioma = req.user.idioma || 'es';
+  const validacion = validarContenido(titulo, descripcion || '', idioma);
+  if (!validacion.valido) {
+    return res.status(400).json({ error: validacion.razon });
+  }
+
   try {
     let sql = 'UPDATE items SET titulo = ?, descripcion = ?';
     const params = [titulo, descripcion || ''];
@@ -197,8 +370,37 @@ app.get('/api/items/export', auth, async (req, res) => {
 
 app.get('/api/usuarios', auth, async (req, res) => {
   try {
-    const rows = await query('SELECT id, nombre, email, creado_en FROM usuarios ORDER BY creado_en DESC');
+    const rows = await query('SELECT id, nombre, email, idioma, creado_en FROM usuarios ORDER BY creado_en DESC');
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Obtener idioma y datos del usuario autenticado
+app.get('/api/usuarios/me', auth, async (req, res) => {
+  try {
+    const user = await get('SELECT id, nombre, email, idioma, creado_en FROM usuarios WHERE id = ?', [req.user.id]);
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Actualizar idioma preferido del usuario
+app.put('/api/usuarios/me/idioma', auth, async (req, res) => {
+  const { idioma } = req.body;
+  if (!idioma || !['es', 'en', 'ru', 'hi'].includes(idioma)) {
+    return res.status(400).json({ error: 'Idioma no soportado. Usa: es, en, ru o hi' });
+  }
+  try {
+    const result = await run('UPDATE usuarios SET idioma = ? WHERE id = ?', [idioma, req.user.id]);
+    if (result.changes === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+    // Actualir token con nuevo idioma
+    const user = await get('SELECT nombre, email FROM usuarios WHERE id = ?', [req.user.id]);
+    const token = jwt.sign({ id: req.user.id, email: user.email, nombre: user.nombre, idioma }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ mensaje: 'Idioma actualizado', idioma, token });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
