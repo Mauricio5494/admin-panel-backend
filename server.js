@@ -43,8 +43,8 @@ const INSULTOS = {
     'mierda', 'pendejo', 'pendeja', 'gilipollas', 'capullo', 'maricon', 'maricón',
     'basura', 'inutil', 'inútil', 'miserable', 'cagado', 'cagada', 'hostia', 'hostias',
     'mariconazo', 'putanazo', 'cabrónazo', 'jodido', 'jodida', 'joderse', 'pene',
-    'pene', 'vagina', 'cojones', 'cojuda', 'cojudo', 'concha', 'conchudo', 'conchuda',
-    'verga', 'verga', 'vergon', 'verga', 'chingar', 'chingada', 'chingado', 'chingao'
+    'vagina', 'cojones', 'cojuda', 'cojudo', 'concha', 'conchudo', 'conchuda',
+    'verga', 'chingar', 'chingada', 'chingado', 'chingao'
   ],
   en: [
     'idiot', 'stupid', 'imbecile', 'moron', 'dumbass', 'asshole', 'bastard', 'bitch',
@@ -138,61 +138,24 @@ function auth(req, res, next) {
 // ---------- INICIALIZAR BASE DE DATOS Y ARRANCAR SERVIDOR ----------
 
 async function inicializarTablas() {
+  // Usar initDb de db.js que ya maneja PostgreSQL y SQLite correctamente
+  await initDb();
+
+  // Migración: agregar columna idioma si no existe
   if (isProduction) {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS usuarios (
-        id SERIAL PRIMARY KEY,
-        nombre TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        idioma TEXT DEFAULT 'es',
-        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS items (
-        id SERIAL PRIMARY KEY,
-        titulo TEXT NOT NULL,
-        descripcion TEXT,
-        imagen TEXT,
-        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        usuario_id INTEGER REFERENCES usuarios(id)
-      );
-    `);
+    // PostgreSQL
+    try {
+      await run(`ALTER TABLE usuarios ADD COLUMN idioma TEXT DEFAULT 'es'`);
+    } catch (err) {
+      // Columna ya existe, ignorar
+    }
   } else {
-    await new Promise((resolve, reject) => {
-      sqliteDb.serialize(() => {
-        sqliteDb.run(`CREATE TABLE IF NOT EXISTS usuarios (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          nombre TEXT NOT NULL,
-          email TEXT UNIQUE NOT NULL,
-          password_hash TEXT NOT NULL,
-          idioma TEXT DEFAULT 'es',
-          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
-        sqliteDb.run(`CREATE TABLE IF NOT EXISTS items (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          titulo TEXT NOT NULL,
-          descripcion TEXT,
-          imagen TEXT,
-          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
-          usuario_id INTEGER,
-          FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
-        )`);
-        // Migraciones para bases de datos preexistentes
-        function asegurarColumna(tabla, columna, definicion) {
-          sqliteDb.run(`ALTER TABLE ${tabla} ADD COLUMN ${columna} ${definicion}`, (err) => {
-            if (err && err.message && err.message.includes('duplicate column')) {
-              // La columna ya existe, ignorar
-            }
-          });
-        }
-        asegurarColumna('usuarios', 'password_hash', 'TEXT');
-        asegurarColumna('usuarios', 'idioma', "TEXT DEFAULT 'es'");
-        asegurarColumna('items', 'imagen', 'TEXT');
-        asegurarColumna('items', 'descripcion', 'TEXT');
-        asegurarColumna('items', 'usuario_id', 'INTEGER');
-        resolve();
-      });
-    });
+    // SQLite
+    try {
+      await run(`ALTER TABLE usuarios ADD COLUMN idioma TEXT DEFAULT 'es'`);
+    } catch (err) {
+      // Columna ya existe, ignorar (SQLite tira error "duplicate column")
+    }
   }
 }
 
@@ -397,7 +360,7 @@ app.put('/api/usuarios/me/idioma', auth, async (req, res) => {
   try {
     const result = await run('UPDATE usuarios SET idioma = ? WHERE id = ?', [idioma, req.user.id]);
     if (result.changes === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
-    // Actualir token con nuevo idioma
+    // Actualizar token con nuevo idioma
     const user = await get('SELECT nombre, email FROM usuarios WHERE id = ?', [req.user.id]);
     const token = jwt.sign({ id: req.user.id, email: user.email, nombre: user.nombre, idioma }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ mensaje: 'Idioma actualizado', idioma, token });
