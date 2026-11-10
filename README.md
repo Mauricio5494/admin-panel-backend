@@ -24,12 +24,14 @@ Características
 Instalación y ejecución local
 
 # Clonar el repositorio
+```sh
 git clone https://github.com/Mauricio5494/admin-panel-backend.git
 cd admin-panel-backend
-
+```
 # Instalar dependencias
+```bash
 npm install
-
+```
 # Ejecutar en modo desarrollo
 npm run dev
 
